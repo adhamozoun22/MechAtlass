@@ -1,0 +1,353 @@
+<!DOCTYPE html>
+<html lang="en" dir="ltr" class="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MechAtlas</title>
+    
+    <meta name="description" content="MechAtlas — موسوعة الهندسة الميكانيكية التفاعلية | Interactive mechanical engineering encyclopedia">
+
+    <!-- PWA (relative paths so the app works from any sub-folder, e.g. GitHub Pages) -->
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#0ea5e9">
+    <link rel="icon" type="image/png" href="icons/icon-192.png">
+
+    <!-- iOS Support -->
+    <link rel="apple-touch-icon" href="icons/icon-192.png">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="MechAtlas">
+
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        primary: {
+                            50: '#f0f9ff', 100: '#e0f2fe', 500: '#0ea5e9', 600: '#0284c7', 700: '#0369a1',
+                        }
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'Cairo', 'sans-serif'],
+                    },
+                    animation: { 'spin-slow': 'spin 8s linear infinite' }
+                }
+            }
+        }
+    </script>
+    
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+    <!-- FontAwesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <script src="js/vendor/three.min.js"></script>
+    <script src="js/vendor/OrbitControls.js"></script>
+    
+    <link rel="stylesheet" href="css/app.css">
+    <link rel="stylesheet" href="academy/academy.css">
+</head>
+<body class="bg-gray-50 text-gray-900 antialiased min-h-screen flex flex-col">
+
+    <nav class="glass-panel sticky top-0 z-50 shadow-sm transition-colors duration-300">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between h-16">
+                <!-- Logo -->
+                <div class="flex items-center">
+                    <i class="fa-solid fa-gear text-primary-600 text-2xl mr-2 rtl:ml-2 rtl:mr-0 animate-spin-slow"></i>
+                    <span class="font-bold text-xl tracking-tight" data-i18n="app_title">MechAtlas</span>
+                </div>
+                
+                <!-- Desktop Menu -->
+                <div class="hidden md:flex items-center space-x-1 rtl:space-x-reverse">
+                    <button onclick="navigate('home')" class="nav-btn px-3 py-2 rounded-md text-sm font-medium hover:bg-gray-100 dark:hover:bg-gray-800" data-i18n="nav_home">Home</button>
+                    <button onclick="navigate('encyclopedia')" class="nav-btn px-3 py-2 rounded-md text-sm font-medium hover:bg-gray-100 dark:hover:bg-gray-800" data-i18n="nav_encyclopedia">Encyclopedia</button>
+                    <button onclick="navigate('processes')" class="nav-btn px-3 py-2 rounded-md text-sm font-medium hover:bg-gray-100 dark:hover:bg-gray-800" data-i18n="nav_processes">Processes</button>
+                    <button onclick="navigate('3d-lab')" class="nav-btn px-3 py-2 rounded-md text-sm font-medium hover:bg-gray-100 dark:hover:bg-gray-800" data-i18n="nav_lab">3D Lab</button>
+                    <button onclick="navigate('cnc-secrets')" class="nav-btn px-3 py-2 rounded-md text-sm font-medium hover:bg-gray-100 dark:hover:bg-gray-800" data-i18n="nav_cnc">CNC Secrets</button>
+                    <button onclick="navigate('calculators')" class="nav-btn px-3 py-2 rounded-md text-sm font-medium hover:bg-gray-100 dark:hover:bg-gray-800" data-i18n="nav_calc">Calculators</button>
+                    <button onclick="navigate('mtest')" class="nav-btn px-3 py-2 rounded-md text-sm font-medium hover:bg-gray-100 dark:hover:bg-gray-800" data-i18n="nav_mtest">Materials Testing</button>
+                    <button onclick="navigate('academy')" class="nav-btn px-3 py-2 rounded-md text-sm font-medium hover:bg-gray-100 dark:hover:bg-gray-800" data-i18n="nav_academy">Academy</button>
+                    <button onclick="navigate('quiz')" class="nav-btn px-3 py-2 rounded-md text-sm font-medium hover:bg-gray-100 dark:hover:bg-gray-800" data-i18n="nav_quiz">Quiz</button>
+                    
+                    <div class="border-l border-gray-300 dark:border-gray-600 h-6 mx-2"></div>
+                    
+                    <button onclick="toggleLanguage()" data-i18n-aria="aria_lang" aria-label="Change language" class="px-3 py-2 rounded-md text-sm font-medium hover:bg-gray-100 dark:hover:bg-gray-800 flex items-center">
+                        <i class="fa-solid fa-language mr-1 rtl:ml-1 rtl:mr-0"></i> <span id="lang-text">عربي</span>
+                    </button>
+                    <button onclick="toggleTheme()" data-i18n-aria="aria_theme" aria-label="Toggle dark mode" class="px-3 py-2 rounded-md text-sm font-medium hover:bg-gray-100 dark:hover:bg-gray-800">
+                        <i id="theme-icon" class="fa-solid fa-moon"></i>
+                    </button>
+                </div>
+
+                <!-- Mobile menu button -->
+                <div class="flex items-center md:hidden space-x-2 rtl:space-x-reverse">
+                    <button onclick="toggleLanguage()" data-i18n-aria="aria_lang" aria-label="Change language" class="p-2 rounded-md hover:bg-gray-100 dark:hover:bg-gray-800"><i class="fa-solid fa-language"></i></button>
+                    <button onclick="toggleTheme()" data-i18n-aria="aria_theme" aria-label="Toggle dark mode" class="p-2 rounded-md hover:bg-gray-100 dark:hover:bg-gray-800"><i id="theme-icon-mobile" class="fa-solid fa-moon"></i></button>
+                    <button onclick="document.getElementById('mobile-menu').classList.toggle('hidden')" data-i18n-aria="aria_menu" aria-label="Open menu" class="p-2 rounded-md hover:bg-gray-100 dark:hover:bg-gray-800 focus:outline-none"><i class="fa-solid fa-bars"></i></button>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Mobile Menu -->
+        <div id="mobile-menu" class="hidden md:hidden border-t border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900">
+            <div class="px-2 pt-2 pb-3 space-y-1 sm:px-3">
+                <button onclick="navigate('home'); document.getElementById('mobile-menu').classList.add('hidden')" class="block w-full text-left rtl:text-right px-3 py-2 rounded-md text-base font-medium hover:bg-gray-100 dark:hover:bg-gray-800" data-i18n="nav_home">Home</button>
+                <button onclick="navigate('encyclopedia'); document.getElementById('mobile-menu').classList.add('hidden')" class="block w-full text-left rtl:text-right px-3 py-2 rounded-md text-base font-medium hover:bg-gray-100 dark:hover:bg-gray-800" data-i18n="nav_encyclopedia">Encyclopedia</button>
+                <button onclick="navigate('processes'); document.getElementById('mobile-menu').classList.add('hidden')" class="block w-full text-left rtl:text-right px-3 py-2 rounded-md text-base font-medium hover:bg-gray-100 dark:hover:bg-gray-800" data-i18n="nav_processes">Processes</button>
+                <button onclick="navigate('3d-lab'); document.getElementById('mobile-menu').classList.add('hidden')" class="block w-full text-left rtl:text-right px-3 py-2 rounded-md text-base font-medium hover:bg-gray-100 dark:hover:bg-gray-800" data-i18n="nav_lab">3D Lab</button>
+                <button onclick="navigate('cnc-secrets'); document.getElementById('mobile-menu').classList.add('hidden')" class="block w-full text-left rtl:text-right px-3 py-2 rounded-md text-base font-medium hover:bg-gray-100 dark:hover:bg-gray-800" data-i18n="nav_cnc">CNC Secrets</button>
+                <button onclick="navigate('calculators'); document.getElementById('mobile-menu').classList.add('hidden')" class="block w-full text-left rtl:text-right px-3 py-2 rounded-md text-base font-medium hover:bg-gray-100 dark:hover:bg-gray-800" data-i18n="nav_calc">Calculators</button>
+                <button onclick="navigate('mtest'); document.getElementById('mobile-menu').classList.add('hidden')" class="block w-full text-left rtl:text-right px-3 py-2 rounded-md text-base font-medium hover:bg-gray-100 dark:hover:bg-gray-800" data-i18n="nav_mtest">Materials Testing</button>
+                <button onclick="navigate('academy'); document.getElementById('mobile-menu').classList.add('hidden')" class="block w-full text-left rtl:text-right px-3 py-2 rounded-md text-base font-medium hover:bg-gray-100 dark:hover:bg-gray-800" data-i18n="nav_academy">Academy</button>
+                <button onclick="navigate('quiz'); document.getElementById('mobile-menu').classList.add('hidden')" class="block w-full text-left rtl:text-right px-3 py-2 rounded-md text-base font-medium hover:bg-gray-100 dark:hover:bg-gray-800" data-i18n="nav_quiz">Quiz</button>
+            </div>
+        </div>
+    </nav>
+
+    <main class="flex-grow max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 w-full">
+        
+        <!-- ==================== HOME SECTION ==================== -->
+        <section id="page-home" class="page-section active">
+            <div class="text-center py-12">
+                <h1 class="text-4xl font-extrabold text-primary-600 sm:text-5xl md:text-6xl mb-4" data-i18n="home_title">Mechanical Engineering Platform</h1>
+                <p class="mt-3 max-w-md mx-auto text-base text-gray-500 dark:text-gray-400 sm:text-lg md:mt-5 md:text-xl md:max-w-3xl" data-i18n="home_subtitle">
+                    Interactive encyclopedia, manufacturing processes, 3D component laboratory, and engineering calculators.
+                </p>
+                <div class="mt-10 flex justify-center gap-4 flex-wrap">
+                    <button onclick="navigate('encyclopedia')" class="px-8 py-3 border border-transparent text-base font-medium rounded-md text-white bg-primary-600 hover:bg-primary-700 shadow-lg shadow-primary-500/30 transition-transform hover:scale-105" data-i18n="btn_start_learning">Start Learning</button>
+                    <button onclick="navigate('3d-lab')" class="px-8 py-3 border border-transparent text-base font-medium rounded-md text-primary-700 bg-primary-100 hover:bg-primary-200 transition-transform hover:scale-105 dark:bg-gray-800 dark:text-primary-400 dark:hover:bg-gray-700" data-i18n="btn_explore_3d">Explore 3D Lab</button>
+                </div>
+            </div>
+
+            <!-- Features Cards -->
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mt-12">
+                <div class="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-md border border-gray-100 dark:border-gray-700 hover:border-primary-500 transition-colors cursor-pointer" onclick="navigate('encyclopedia')">
+                    <div class="w-12 h-12 bg-blue-100 text-blue-600 rounded-lg flex items-center justify-center text-xl mb-4"><i class="fa-solid fa-book"></i></div>
+                    <h3 class="text-lg font-bold mb-2" data-i18n="feat_encyclopedia">Dictionary</h3>
+                    <p class="text-sm text-gray-600 dark:text-gray-400" data-i18n="feat_encyclopedia_desc">Search and learn mechanical engineering terms in Arabic and English.</p>
+                </div>
+                <div class="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-md border border-gray-100 dark:border-gray-700 hover:border-primary-500 transition-colors cursor-pointer" onclick="navigate('processes')">
+                    <div class="w-12 h-12 bg-green-100 text-green-600 rounded-lg flex items-center justify-center text-xl mb-4"><i class="fa-solid fa-industry"></i></div>
+                    <h3 class="text-lg font-bold mb-2" data-i18n="feat_processes">Manufacturing</h3>
+                    <p class="text-sm text-gray-600 dark:text-gray-400" data-i18n="feat_processes_desc">Learn about turning, milling, casting, 3D printing and more.</p>
+                </div>
+                <div class="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-md border border-gray-100 dark:border-gray-700 hover:border-primary-500 transition-colors cursor-pointer" onclick="navigate('3d-lab')">
+                    <div class="w-12 h-12 bg-purple-100 text-purple-600 rounded-lg flex items-center justify-center text-xl mb-4"><i class="fa-solid fa-cube"></i></div>
+                    <h3 class="text-lg font-bold mb-2" data-i18n="feat_3d">3D Laboratory</h3>
+                    <p class="text-sm text-gray-600 dark:text-gray-400" data-i18n="feat_3d_desc">Interact with generic 3D models of bearings, gears, and fasteners.</p>
+                </div>
+                <div class="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-md border border-gray-100 dark:border-gray-700 hover:border-primary-500 transition-colors cursor-pointer" onclick="navigate('calculators')">
+                    <div class="w-12 h-12 bg-orange-100 text-orange-600 rounded-lg flex items-center justify-center text-xl mb-4"><i class="fa-solid fa-calculator"></i></div>
+                    <h3 class="text-lg font-bold mb-2" data-i18n="feat_calc">Calculators</h3>
+                    <p class="text-sm text-gray-600 dark:text-gray-400" data-i18n="feat_calc_desc">Compute stress, strain, torque, gear ratios and mechanical power.</p>
+                </div>
+                <div class="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-md border border-gray-100 dark:border-gray-700 hover:border-primary-500 transition-colors cursor-pointer" onclick="navigate('cnc-secrets')">
+                    <div class="w-12 h-12 bg-red-100 text-red-600 rounded-lg flex items-center justify-center text-xl mb-4"><i class="fa-solid fa-circle-play"></i></div>
+                    <h3 class="text-lg font-bold mb-2" data-i18n="nav_cnc">CNC Secrets</h3>
+                    <p class="text-sm text-gray-600 dark:text-gray-400" data-i18n="feat_cnc_desc">A video series about CNC machines.</p>
+                </div>
+                <div class="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-md border border-gray-100 dark:border-gray-700 hover:border-primary-500 transition-colors cursor-pointer" onclick="navigate('beam')">
+                    <div class="w-12 h-12 bg-teal-100 text-teal-600 rounded-lg flex items-center justify-center text-xl mb-4"><i class="fa-solid fa-chart-area"></i></div>
+                    <h3 class="text-lg font-bold mb-2" data-i18n="nav_beam">Beam Designer</h3>
+                    <p class="text-sm text-gray-600 dark:text-gray-400" data-i18n="feat_beam_desc">Draw a beam, add loads, get shear and moment diagrams.</p>
+                </div>
+                <div class="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-md border border-gray-100 dark:border-gray-700 hover:border-primary-500 transition-colors cursor-pointer" onclick="navigate('academy')">
+                    <div class="w-12 h-12 bg-indigo-100 text-indigo-600 rounded-lg flex items-center justify-center text-xl mb-4"><i class="fa-solid fa-graduation-cap"></i></div>
+                    <h3 class="text-lg font-bold mb-2" data-i18n="nav_academy">Academy</h3>
+                    <p class="text-sm text-gray-600 dark:text-gray-400" data-i18n="feat_academy_desc">Engineering articles, projects and experiments in simple words.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- ==================== ENCYCLOPEDIA SECTION ==================== -->
+        <section id="page-encyclopedia" class="page-section">
+            <div class="mb-6 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                <h2 class="text-3xl font-bold" data-i18n="nav_encyclopedia">Engineering Encyclopedia</h2>
+                <div class="flex flex-col sm:flex-row gap-2 w-full md:w-auto">
+                    <div class="relative w-full sm:w-64">
+                        <input type="text" id="search-input" class="w-full pl-10 rtl:pr-10 rtl:pl-3 pr-3 py-2 border rounded-md dark:bg-gray-800 dark:border-gray-700 focus:ring-primary-500" placeholder="Search terms..." data-i18n-ph="ph_search" aria-label="Search" oninput="filterDictionary()">
+                        <div class="absolute inset-y-0 left-0 rtl:right-0 flex items-center pl-3 rtl:pr-3 pointer-events-none">
+                            <i class="fa-solid fa-search text-gray-400"></i>
+                        </div>
+                    </div>
+                    <input type="hidden" id="category-filter" value="all">
+                </div>
+            </div>
+            <div id="cat-chips" class="lab-tabs mb-3"></div>
+            <div id="dict-count" class="text-sm text-gray-500 mb-3"></div>
+            <!-- Encyclopedia list container -->
+            <div id="dictionary-list" class="grid grid-cols-1 gap-4"></div>
+            <div id="dict-more" class="text-center my-4"></div>
+            <div id="no-results" class="hidden text-center py-10 text-gray-500" data-i18n="no_results">No results found matching your search.</div>
+        </section>
+
+        <!-- ==================== PROCESSES SECTION ==================== -->
+        <section id="page-processes" class="page-section">
+            <h2 class="text-3xl font-bold mb-6" data-i18n="nav_processes">Manufacturing Processes</h2>
+            <div class="flex flex-col lg:flex-row gap-6">
+                <div class="w-full lg:w-1/4">
+                    <div class="bg-white dark:bg-gray-800 rounded-lg shadow border border-gray-200 dark:border-gray-700 overflow-hidden">
+                        <ul id="process-menu" class="divide-y divide-gray-200 dark:divide-gray-700"></ul>
+                    </div>
+                </div>
+                <div class="w-full lg:w-3/4 bg-white dark:bg-gray-800 rounded-lg shadow p-6 border border-gray-200 dark:border-gray-700" id="process-content">
+                    <div class="text-center py-12 text-gray-500">
+                        <i class="fa-solid fa-cogs text-4xl mb-4 text-gray-300 dark:text-gray-600"></i>
+                        <p data-i18n="select_process">Select a manufacturing process from the list to view details.</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ==================== 3D LAB SECTION ==================== -->
+        <section id="page-3d-lab" class="page-section">
+            <h2 class="text-3xl font-bold mb-4" data-i18n="nav_lab">3D Lab</h2>
+            <div id="lab-wrap">
+                <div id="lab-tabs" class="lab-tabs" aria-label="Labs"></div>
+                <div id="lab-models" class="lab-chips"></div>
+                <div class="lab-grid">
+                    <div class="lab-main">
+                        <div id="canvas-container">
+                            <div id="lab-toolbar" class="lab-toolbar"></div>
+                            <div id="lab-labels"></div>
+                            <div id="viewer-fallback">
+                                <i class="fa-solid fa-triangle-exclamation text-4xl text-yellow-400 mb-2"></i>
+                                <h3 class="text-xl font-bold" data-i18n="err_3d_title">3D Rendering Failed</h3>
+                                <p class="text-sm text-gray-300 max-w-md mt-2" data-i18n="err_3d_desc">Your browser or device may not support WebGL.</p>
+                            </div>
+                        </div>
+                        <div id="lab-readouts" class="readout-bar" aria-live="polite"></div>
+                        <div id="lab-charts" class="lab-charts" style="display:none"><canvas id="lab-chart-canvas"></canvas></div>
+                    </div>
+                    <aside class="lab-side">
+                        <div class="lab-card" id="lab-controls"></div>
+                        <div class="lab-card" id="lab-challenges"></div>
+                        <div class="lab-card" id="lab-info"></div>
+                    </aside>
+                </div>
+            </div>
+        </section>
+
+        <!-- ==================== CNC SECRETS SECTION ==================== -->
+        <section id="page-beam" class="page-section">
+            <div class="flex items-center justify-between mb-2 flex-wrap gap-2"><h2 class="text-3xl font-bold" data-i18n="nav_beam">Beam Designer</h2>
+            <button type="button" onclick="navigate('3d-lab'); if (window.Labs) { Labs.engine.start(); Labs.engine.openLab('strength'); }" class="px-3 py-2 rounded-md text-sm font-medium bg-primary-100 text-primary-700 dark:bg-gray-700 dark:text-primary-400"><i class="fa-solid fa-cube"></i> <span data-i18n="beam_to_lab">Strength lab</span></button></div>
+            <div id="bd-root" class="max-w-2xl mx-auto"></div>
+        </section>
+        <section id="page-cnc-secrets" class="page-section">
+            <h2 class="text-3xl font-bold mb-2" data-i18n="nav_cnc">CNC Secrets</h2>
+            <p class="text-sm text-gray-600 dark:text-gray-400 mb-6" id="cnc-sub"></p>
+            <div id="cnc-offline" class="max-w-2xl mx-auto mb-4"></div>
+            <div id="cnc-list" class="max-w-2xl mx-auto space-y-4"></div>
+        </section>
+
+        <!-- ==================== CALCULATORS SECTION ==================== -->
+        <section id="page-calculators" class="page-section">
+            <h2 class="text-3xl font-bold mb-6" data-i18n="nav_calc">Engineering Calculators</h2>
+            <div id="calc-grid" class="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6"></div>
+        </section>
+
+        <!-- ==================== QUIZ SECTION ==================== -->
+        <section id="page-quiz" class="page-section">
+            <h2 class="text-3xl font-bold mb-6" data-i18n="nav_quiz">Knowledge Check</h2>
+            <div class="max-w-2xl mx-auto bg-white dark:bg-gray-800 rounded-xl shadow-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
+                <div class="p-6">
+                    <div class="flex justify-between items-center mb-6">
+                        <span class="text-sm font-medium text-gray-500 dark:text-gray-400" id="quiz-progress">Question 1 of X</span>
+                        <span class="px-3 py-1 bg-blue-100 text-blue-800 rounded-full text-xs font-bold" id="quiz-score">Score: 0</span>
+                    </div>
+                    <div id="quiz-container"></div>
+                    <div id="quiz-feedback" class="mt-4 hidden p-4 rounded-md"></div>
+                </div>
+                <div class="px-6 py-4 bg-gray-50 dark:bg-gray-700 border-t flex justify-end gap-2">
+                    <button id="restart-btn" onclick="initQuiz()" class="hidden px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700 transition" data-i18n="btn_restart">Restart</button>
+                    <button id="next-btn" onclick="nextQuestion()" class="hidden px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700 transition disabled:opacity-50 disabled:cursor-not-allowed" data-i18n="btn_next">Next Question</button>
+                </div>
+            </div>
+        </section>
+        <!-- ==================== MATERIALS TESTING SECTION ==================== -->
+        <section id="page-mtest" class="page-section">
+            <div id="mtest-root"></div>
+        </section>
+        <section id="page-academy" class="page-section">
+            <div id="academy-root"></div>
+        </section>
+    </main>
+
+    <footer class="bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-800 mt-auto">
+        <div class="max-w-7xl mx-auto py-6 px-4 text-center space-y-3">
+            <p class="text-sm text-gray-500 dark:text-gray-400" data-i18n="footer_text">Educational prototype. Data is for learning purposes.</p>
+            <p class="text-sm font-semibold text-gray-700 dark:text-gray-200">
+                <span data-i18n="dev_credit">Designed &amp; developed by:</span>
+                <span class="text-primary-600 dark:text-primary-400">المهندس أدهم أوزون</span>
+            </p>
+            <p class="text-sm text-gray-600 dark:text-gray-300">
+                <span data-i18n="dev_more">For more engineering content, follow us on Telegram:</span>
+                <a href="https://t.me/ZeroPointHmk" target="_blank" rel="noopener noreferrer" class="inline-block mx-1 px-2 py-1 rounded bg-blue-100 text-blue-700 hover:bg-blue-200 dark:bg-gray-800 dark:text-primary-400 dark:hover:bg-gray-700 font-bold no-underline" data-i18n="dev_channel">ZERO POINT channel</a>
+            </p>
+        </div>
+    </footer>
+
+    <!-- PWA Service Worker Registration -->
+    <script>
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('./service-worker.js')
+                    .catch(error => console.warn('ServiceWorker registration failed:', error));
+            });
+        }
+    </script>
+
+    <script src="js/i18n.js"></script>
+    <script src="js/data/dictionary.js"></script>
+    <script src="js/data/terms_a.js"></script>
+    <script src="js/data/terms_b.js"></script>
+    <script src="js/data/terms_c.js"></script>
+    <script src="js/data/terms_d.js"></script>
+    <script src="js/data/terms_e.js"></script>
+    <script src="js/data/terms_f.js"></script>
+    <script src="js/data/terms_g.js"></script>
+    <script src="js/data/terms_h.js"></script>
+    <script src="js/data/terms_i.js"></script>
+    <script src="js/data/terms_load.js"></script>
+    <script src="js/data/processes.js"></script>
+    <script src="js/data/cnc_series.js"></script>
+    <script src="js/labs/engine.js"></script>
+    <script src="js/labs/gears.js"></script>
+    <script src="js/labs/gears_more.js"></script>
+    <script src="js/labs/disasm.js"></script>
+    <script src="js/labs/disasm_bearing.js"></script>
+    <script src="js/labs/disasm_coupling.js"></script>
+    <script src="js/labs/disasm_gearbox.js"></script>
+    <script src="js/labs/disasm_pump.js"></script>
+    <script src="js/labs/disasm_engine.js"></script>
+    <script src="js/labs/disasm_extras.js"></script>
+<script src="js/labs/strength.js"></script>
+<script src="js/labs/strength_more.js"></script>
+<script src="js/beam_designer.js"></script>
+<script src="js/labs/fluids.js"></script>
+<script src="js/labs/fluids_more.js"></script>
+<script src="js/labs/hydraulics.js"></script>
+<script src="js/labs/hydraulics_more.js"></script>
+<script src="js/labs/manufacturing.js"></script>
+<script src="js/labs/manufacturing_more.js"></script>
+<script src="js/labs/manufacturing_forming.js"></script>
+    <script src="js/data/mtest_svg.js"></script>
+    <script src="js/data/mtest_a.js"></script>
+    <script src="js/data/mtest_b.js"></script>
+    <script src="js/data/mtest_c.js"></script>
+    <script src="js/mtest_video.js"></script>
+    <script src="js/mtest.js"></script>
+    <script src="academy/config.js"></script>
+    <script src="academy/api.js"></script>
+    <script src="academy/render.js"></script>
+    <script src="academy/ui.js"></script>
+    <script src="academy/core.js"></script>
+    <script src="js/app.js"></script>
+</body>
+</html>

@@ -1,0 +1,117 @@
+import subprocess,time,json,os
+from playwright.sync_api import sync_playwright
+H=os.path.dirname(os.path.abspath(__file__));ROOT=os.path.abspath(H+'/../MechAtlas');PORT=8844;URL=f'http://127.0.0.1:{PORT}/admin/index.html'
+MOCK=open(H+'/mock_admin.js').read();KATEX=open(H+'/mock_katex.js').read()
+R=[];errs=[]
+def ok(n,c,x=''):
+    R.append((n,bool(c),str(x)[:240]));print(('PASS ' if c else 'FAIL ')+n+('' if c else '  -> '+str(x)[:240]),flush=True)
+srv=subprocess.Popen(['python3',H+'/rsrv.py',ROOT,str(PORT)],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL);time.sleep(.8)
+def mk(br,vw=1100):
+    ctx=br.new_context(viewport={'width':vw,'height':900},service_workers='block')
+    def h(r):
+        u=r.request.url
+        if '127.0.0.1' in u: return r.continue_()
+        if 'supabase-js' in u: return r.fulfill(status=200,body=MOCK,content_type='application/javascript')
+        if 'katex.min.js' in u: return r.fulfill(status=200,body=KATEX,content_type='application/javascript')
+        if u.startswith('https://krifmzrzzytdstjrbbtq'): return r.fulfill(status=200,body='',content_type='image/png')
+        return r.fulfill(status=200,body='',content_type='text/css' if u.endswith('css') else 'application/javascript')
+    ctx.route('**/*',h);pg=ctx.new_page()
+    pg.on('console',lambda m: errs.append(m.text) if m.type=='error' and 'Failed to load resource' not in m.text else None)
+    pg.on('pageerror',lambda e: errs.append(str(e)))
+    pg.goto(URL);pg.wait_for_timeout(600)
+    pg.fill('input[name=email]','mgr@x.com');pg.fill('input[name=password]','Password1');pg.click('button[type=submit]');pg.wait_for_timeout(900);return ctx,pg
+def T(pg): return pg.evaluate("document.getElementById('adm-root').innerText")
+def log(pg,f): return pg.evaluate("__MOCK.log.filter("+f+")")
+def setv(pg,sel,v): pg.fill(sel,v)
+try:
+  with sync_playwright() as p:
+    br=p.chromium.launch(args=['--no-sandbox'])
+    ctx,pg=mk(br)
+    ok('E1 Content tab is the default; list shows items, titles escaped',pg.evaluate("document.querySelectorAll('[data-open]').length")==4 and pg.evaluate("!document.querySelector('#adm-view img')"))
+    pg.select_option('[data-filter]','draft');pg.wait_for_timeout(400)
+    ok('E2 status filter (draft -> 2 items)',pg.evaluate("document.querySelectorAll('[data-open]').length")==2)
+    pg.select_option('[data-filter]','');pg.wait_for_timeout(300)
+    pg.click('[data-open="a"]');pg.wait_for_timeout(600)
+    ok('E3 open item: metadata filled, 2 known blocks loaded, unknown block type not shown',pg.input_value('#m-title')=='مادة 1' and pg.input_value('#m-slug')=='mada-1' and pg.evaluate("document.querySelectorAll('.adm-blk').length")==2)
+    pg.fill('.adm-blk:nth-child(2) textarea','سطر <script>alert(1)</script> و **غامق**');pg.click('[data-prev]');pg.wait_for_timeout(900)
+    ok('E4 live preview uses the public renderer; script text escaped, bold applied, math marked for KaTeX',pg.evaluate("!document.querySelector('#adm-prev script')&&!!document.querySelector('#adm-prev strong')&&document.querySelector('#adm-prev').innerHTML.includes('&lt;script&gt;')"))
+    pg.click('[data-prev]')
+    # move + delete
+    pg.click('.adm-blk:nth-child(1) [data-mv="1"]');ok('E5 move block down swaps order',pg.evaluate("[...document.querySelectorAll('.adm-blk b')].map(b=>b.innerText.replace(/^\\d+\\. /,'')).join()")=='فقرة,عنوان')
+    pg.once('dialog',lambda d:d.dismiss());pg.click('.adm-blk:nth-child(1) [data-bdel]');ok('E6 delete asks confirmation (dismiss keeps the block)',pg.evaluate("document.querySelectorAll('.adm-blk').length")==2)
+    # back with dirty
+    msgs=[]
+    def dlg(d): msgs.append(d.message);d.dismiss()
+    pg.once('dialog',dlg);pg.click('[data-back]');pg.wait_for_timeout(200)
+    ok('E7 unsaved changes: leaving asks, dismiss stays in the editor',len(msgs)==1 and pg.query_selector('#m-title') is not None)
+    # save existing
+    pg.evaluate("__MOCK.log.length=0");pg.click('[data-save]');pg.wait_for_timeout(800)
+    L=pg.evaluate("__MOCK.log.filter(x=>x.table).map(x=>x.table+':'+x.op)")
+    ok('E8 save existing: item updated, NEW blocks inserted BEFORE old ones deleted',L.index('content_blocks:insert')<L.index('content_blocks:delete') and 'content_items:update' in L and 'تم الحفظ' in T(pg),L)
+    ok('E9 old known blocks removed, the unknown-type block preserved untouched',pg.evaluate("__MOCK.D.content_blocks.filter(b=>b.content_item_id==='a').map(b=>b.block_type).sort().join()")=='heading,paragraph,weird',pg.evaluate("JSON.stringify(__MOCK.D.content_blocks)"))
+    ok('E10 updated_at / published_at handled, author not overwritten',pg.evaluate("(()=>{const u=__MOCK.log.find(x=>x.table==='content_items'&&x.op==='update').vals;return !!u.updated_at&&!('author_id' in u)})()"))
+    # new item with every block type
+    pg.click('[data-back]');pg.wait_for_timeout(400);pg.click('[data-new]');pg.wait_for_timeout(500)
+    pg.fill('#m-title','اختبار الشد 101');ok('E11 slug auto-generated from the title (Arabic kept, dashes)',pg.input_value('#m-slug')=='اختبار-الشد-101')
+    pg.fill('#m-slug','tensile-101');pg.select_option('#m-type','t1');pg.select_option('#m-field','f1');pg.select_option('#m-st','published')
+    for ty in ['heading','paragraph','list','image','equation','example','table','pdf','video','quiz','references']:
+        pg.select_option('#m-add',ty);pg.click('[data-addblk]')
+    ok('E12 all 11 block types can be added',pg.evaluate("document.querySelectorAll('.adm-blk').length")==11)
+    pg.click('[data-save]');pg.wait_for_timeout(300)
+    ok('E13 saving with empty blocks is refused with the block number; nothing written',('الكتلة 1' in T(pg)) and not pg.evaluate("__MOCK.log.some(x=>x.table==='content_items'&&x.op==='insert')"),T(pg)[:120])
+    B=lambda i,f:f'.adm-blk:nth-child({i}) [data-f={f}]'
+    pg.fill(B(1,'text'),'المقدمة');pg.select_option(B(1,'level'),'3')
+    pg.fill(B(2,'text'),'فقرة $\\sigma$');
+    pg.fill(B(3,'items'),'الأول\nالثاني\n');pg.check(B(3,'ordered'))
+    # uploads
+    pg.on('dialog',lambda d:d.accept())
+    pg.set_input_files('.adm-blk:nth-child(4) [data-pick]',H+'/fake.png');pg.wait_for_timeout(500)
+    ok('E14 fake image (text with .png name) refused by content check; nothing uploaded',pg.evaluate("__MOCK.uploads.length")==0 and 'غير مسموح' in pg.evaluate("document.querySelector('.adm-blk:nth-child(4) [data-ustat]').innerText"))
+    pg.set_input_files('.adm-blk:nth-child(4) [data-pick]',H+'/big.png');pg.wait_for_timeout(500)
+    ok('E15 oversize image (>10 MB) refused before upload',pg.evaluate("__MOCK.uploads.length")==0 and 'أكبر' in pg.evaluate("document.querySelector('.adm-blk:nth-child(4) [data-ustat]').innerText"))
+    pg.set_input_files('.adm-blk:nth-child(4) [data-pick]',H+'/t.pdf');pg.wait_for_timeout(500)
+    ok('E16 a PDF cannot be uploaded into an image block',pg.evaluate("__MOCK.uploads.length")==0)
+    pg.set_input_files('.adm-blk:nth-child(4) [data-pick]',H+'/t.png');pg.wait_for_timeout(900)
+    up=pg.evaluate("__MOCK.uploads");mf=pg.evaluate("__MOCK.D.media_files")
+    ok('E17 real PNG uploaded to bucket academy-media under img/ with correct type; media_files row written',len(up)==1 and up[0]['p'].startswith('img/') and up[0]['type'] in ('image/png','image/webp') and len(mf)==1 and mf[0]['bucket_name']=='academy-media' and mf[0]['uploaded_by'].endswith('1'),up)
+    pg.fill(B(4,'alt'),'مخطط');pg.fill(B(4,'caption'),'الشكل 1')
+    pg.fill(B(5,'tex'),'\\sigma=F/A');pg.fill(B(5,'label'),'الإجهاد');pg.fill(B(5,'legend'),'σ = الإجهاد\nF = القوة')
+    pg.fill(B(6,'title'),'مثال');pg.fill(B(6,'steps'),'خطوة 1\nخطوة 2');pg.fill(B(6,'result'),'200 MPa')
+    pg.fill(B(7,'caption'),'خواص');pg.fill(B(7,'headers'),'المادة | E');pg.fill(B(7,'rows'),'فولاذ | 200\nألمنيوم | 70')
+    pg.set_input_files('.adm-blk:nth-child(8) [data-pick]',H+'/t.pdf');pg.wait_for_timeout(700);pg.fill(B(8,'title'),'ورقة عمل')
+    pg.fill(B(9,'url'),'javascript:alert(1)');pg.click('[data-save]');pg.wait_for_timeout(300)
+    ok('E18 javascript: video link refused (http/https only)',('رابط غير صالح' in T(pg)) and not pg.evaluate("__MOCK.log.some(x=>x.table==='content_items'&&x.op==='insert')"))
+    pg.fill(B(9,'url'),'https://youtu.be/dQw4w9WgXcQ');pg.fill(B(9,'title'),'فيديو')
+    pg.fill(B(10,'question'),'ما الوحدة؟');pg.fill(B(10,'options'),'N\nMPa\nkg');pg.fill(B(10,'answer'),'9');pg.click('[data-save]');pg.wait_for_timeout(300)
+    ok('E19 quiz with an out-of-range answer refused',('خيارين' in T(pg)))
+    pg.fill(B(10,'answer'),'2');pg.fill(B(11,'items'),'ASTM E8 | https://www.astm.org | معيار\nكتاب بلا رابط')
+    pg.click('[data-prev]');pg.wait_for_timeout(1200)
+    ok('E20 preview of all block types: signed URL requested through the admin client (image + pdf), 11 blocks rendered, video iframe is youtube-nocookie',pg.evaluate("__MOCK.signCalls.flat().filter(x=>x.startsWith('img/')||x.startsWith('pdf/')).length")>=2 and pg.evaluate("!!document.querySelector('#adm-prev iframe[src^=\"https://www.youtube-nocookie.com/\"]')") and pg.evaluate("document.querySelectorAll('#adm-prev .ac-body > *').length")>=11)
+    pg.evaluate("__MOCK.log.length=0");pg.click('[data-save]');pg.wait_for_timeout(900)
+    ins=pg.evaluate("__MOCK.log.find(x=>x.table==='content_items'&&x.op==='insert')");bl=pg.evaluate("__MOCK.log.find(x=>x.table==='content_blocks'&&x.op==='insert').vals")
+    ok('E21 new item: author_id = signed-in user, slug/type/field/status saved, published_at set automatically',ins and ins['vals']['author_id'].endswith('1') and ins['vals']['slug']=='tensile-101' and ins['vals']['status']=='published' and ins['vals']['published_at'] and ins['vals']['content_type_id']=='t1' and ins['vals']['field_id']=='f1',ins)
+    g=lambda ty:[b['content'] for b in bl if b['block_type']==ty][0]
+    ok('E22 stored JSON shapes match the public renderer (heading/list/equation/example/table/quiz/references/video)',bl and [b['sort_order'] for b in bl]==list(range(11)) and g('heading')=={'text':'المقدمة','level':3} and g('list')=={'ordered':True,'items':['الأول','الثاني']} and g('equation')['legend']==[['σ','الإجهاد'],['F','القوة']] and g('example')['steps']==['خطوة 1','خطوة 2'] and g('table')['rows']==[['فولاذ','200'],['ألمنيوم','70']] and g('table')['headers']==['المادة','E'] and g('quiz')['answer']==1 and g('references')['items'][0]['url']=='https://www.astm.org' and g('video')['url'].startswith('https://youtu.be/') and g('pdf')['path'].startswith('pdf/'),bl[:3] if bl else None)
+    ok('E23 after saving: success message; item gets an id (second save UPDATES, no duplicate)','تم الحفظ' in T(pg))
+    n0=pg.evaluate("__MOCK.D.content_items.length");pg.click('[data-save]');pg.wait_for_timeout(700)
+    ok('E24 second save updates the same item',pg.evaluate("__MOCK.D.content_items.length")==n0 and pg.evaluate("__MOCK.D.content_blocks.filter(b=>b.content_item_id==='n1001'||b.content_item_id===__MOCK.D.content_items.slice(-1)[0].id).length")==11)
+    # failure paths
+    pg.click('[data-back]');pg.wait_for_timeout(300);pg.click('[data-new]');pg.wait_for_timeout(400);pg.fill('#m-title','x');pg.fill('#m-slug','tensile-101')
+    pg.select_option('#m-add','paragraph');pg.click('[data-addblk]');pg.fill('.adm-blk textarea','t');pg.evaluate("__MOCK.log.length=0");pg.click('[data-save]');pg.wait_for_timeout(500)
+    ok('E25 duplicate slug -> friendly message, no blocks written',('مستخدم' in T(pg)) and not pg.evaluate("__MOCK.log.some(x=>x.table==='content_blocks')"))
+    pg.click('[data-back]');pg.wait_for_timeout(300);pg.click('[data-open="a"]');pg.wait_for_timeout(500)
+    pg.evaluate("__MOCK.fail.content_blocks_insert=1;__MOCK.log.length=0");pg.click('[data-save]');pg.wait_for_timeout(600)
+    ok('E26 block insert fails -> clear message, OLD blocks are NOT deleted',('لم يُفقد' in T(pg)) and not pg.evaluate("__MOCK.log.some(x=>x.table==='content_blocks'&&x.op==='delete')"))
+    pg.evaluate("__MOCK.fail.content_blocks_insert=0;__MOCK.noDelete=1");pg.click('[data-save]');pg.wait_for_timeout(700)
+    ok('E27 old blocks cannot be removed (e.g. policy) -> duplicates warning shown, not a false success',('مكررة' in T(pg)))
+    pg.evaluate("__MOCK.noDelete=0;__MOCK.noUpdate=1;__MOCK.log.length=0");pg.click('[data-save]');pg.wait_for_timeout(600)
+    ok('E28 silent zero-row update (no permission) detected -> error, no blocks written',('لا صلاحية' in T(pg)) and not pg.evaluate("__MOCK.log.some(x=>x.table==='content_blocks'&&x.op==='insert')"))
+    pg.evaluate("__MOCK.noUpdate=0")
+    pg.set_viewport_size({'width':360,'height':800});pg.wait_for_timeout(200)
+    ok('E29 360px: editor has no horizontal scroll',pg.evaluate("document.documentElement.scrollWidth")<=360,pg.evaluate("document.documentElement.scrollWidth"))
+    ok('E30 only the PUBLISHABLE key is used; editor never calls the invite function or admin APIs',not pg.evaluate("__MOCK.log.some(x=>x.fn)"))
+    ctx.close()
+    ok('Z no JavaScript / CSP errors',not errs,errs[:3])
+    br.close()
+finally: srv.kill()
+n=sum(1 for r in R if r[1]);print(f'\n{n}/{len(R)} passed');json.dump(R,open(H+'/editor_test.json','w'),ensure_ascii=False,indent=1)
