@@ -1,0 +1,14 @@
+Add these lines to android/app/src/main/AndroidManifest.xml
+
+1) next to the existing <uses-permission android:name="android.permission.INTERNET" /> line (outside <application>):
+
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
+2) inside <application ...> ... </application> (for example right after the opening <application> tag):
+
+    <meta-data android:name="com.google.firebase.messaging.default_notification_icon"
+               android:resource="@drawable/ic_stat_mechatlas" />
+    <meta-data android:name="com.google.firebase.messaging.default_notification_color"
+               android:resource="@color/colorPrimary" />
+
+(the second meta-data is optional; if the build says @color/colorPrimary is missing, delete that block or use android:value="#0284C7" instead of android:resource)

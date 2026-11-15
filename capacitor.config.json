@@ -1,0 +1,11 @@
+{
+  "appId": "com.mechatlas.app",
+  "appName": "MechAtlas",
+  "webDir": "www",
+  "server": {
+    "androidScheme": "https"
+  },
+  "android": {
+    "allowMixedContent": false
+  }
+}
